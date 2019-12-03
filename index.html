@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>drawing</title>
+  <style>
+    #box {
+      width: 500px;
+      height: 500px;
+    }
+  </style>
+</head>
+<body>
+  <div id="box"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.12.0/d3.min.js"></script>
+  <script src="/release/index.js"></script>
+  <script>
+    var draw = new Draw("#box");
+    draw.create();
+
+  </script>
+</body>
+</html>

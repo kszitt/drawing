@@ -1,0 +1,23 @@
+{
+  "name": "drawing",
+  "version": "1.0.0",
+  "description": "",
+  "main": "release/index.js",
+  "scripts": {
+    "example": "node ./example.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kszitt/drawing.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/kszitt/drawing/issues"
+  },
+  "homepage": "https://github.com/kszitt/drawing#readme",
+  "devDependencies": {
+    "express": "^4.17.1"
+  }
+}
