@@ -1,0 +1,50 @@
+html, body, p, ul, li, img, input, textarea, h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  padding: 0;
+}
+ul, li {
+  list-style: none;
+}
+
+.draw {
+  display: flex;
+  flex-direction: column;
+  .tool {
+    display: flex;
+    margin-bottom: 5px;
+    min-height: 30px;
+    height: 30px;
+    li {
+      width: 30px;
+      height: 30px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #333;
+      cursor: pointer;
+      border-radius: 4px;
+      &:hover, &.active {
+        background-color: #5eb0dd;
+        color: white;
+      }
+    }
+  }
+  svg {
+    cursor: crosshair;
+    border: 1px solid black;
+    flex: 1;
+    &.move {
+      cursor: move;
+    }
+    rect, circle {
+      fill: transparent;
+      stroke: red;
+      stroke-width: 1;
+    }
+    path {
+      fill: none;
+      stroke: #56ccff;
+      stroke-width: 1;
+    }
+  }
+}

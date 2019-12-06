@@ -1,0 +1,37 @@
+{
+  "id": "1547234",
+  "name": "drawing",
+  "font_family": "iconfont",
+  "css_prefix_text": "icon-",
+  "description": "",
+  "glyphs": [
+    {
+      "icon_id": "1666213",
+      "name": "矩形",
+      "font_class": "juxing",
+      "unicode": "e619",
+      "unicode_decimal": 58905
+    },
+    {
+      "icon_id": "1816929",
+      "name": "icon_yuan",
+      "font_class": "iconyuan",
+      "unicode": "e684",
+      "unicode_decimal": 59012
+    },
+    {
+      "icon_id": "5238364",
+      "name": "铅笔",
+      "font_class": "pan_icon1",
+      "unicode": "e600",
+      "unicode_decimal": 58880
+    },
+    {
+      "icon_id": "8306674",
+      "name": "正方形",
+      "font_class": "zhengfangxing",
+      "unicode": "e68f",
+      "unicode_decimal": 59023
+    }
+  ]
+}
