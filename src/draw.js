@@ -50,9 +50,13 @@ class Draw {
   draw = null;  // 当前所画图形
   spotStart = null;  // 绘制图形初始点
   ctrl = false;   // ctrl按键
+  space = false;  // space按键
   mouseEnterEle = false;  // 鼠标是否在可移动图形上
   nowStatus = "";  // 当前状态
-  references = [];  // 所有的参考点
+  references = {};  // 所有的参考点
+  drawReferences = null; // 当前绘制图形的参考点
+  data_id = 1;  // 图形id
+  adhesion = false;  // 参考线吸合
 
   // 初始化
   init(){
@@ -99,8 +103,18 @@ class Draw {
     });
     this.svg.on("mousemove", () => {
       switch(true){
+        // 绘制新图形时的平移
+        case  this.space &&
+              !!this.draw &&
+              /^(rect)|(circle)|(ellipse)$/.test(this.draw.node().tagName) &&
+              this.nowStatus === "draw":
+          this.translation();
+          break;
         // 平移
-        case this.ctrl && !!this.draw && this.nowStatus === "translation":
+        case  this.ctrl &&
+              !!this.draw &&
+              /^(rect)|(circle)|(ellipse)$/.test(this.draw.node().tagName) &&
+              this.nowStatus === "translation":
           this.translation();
           break;
         // 绘制新图形
@@ -112,22 +126,33 @@ class Draw {
     this.document.on("keydown", () => {
       let keyCode = d3.event.keyCode;
       this.ctrl = keyCode === 17;
+      this.space = keyCode === 32;
 
       if(keyCode === 17 && this.mouseEnterEle){
         this.svg.classed("move", true);
       }
     });
     this.document.on("keyup", () => {
-      if(d3.event.keyCode === 17){
-        this.ctrl = false;
-        this.svg.classed("move", false);
+      switch(d3.event.keyCode){
+        case 17:
+          this.ctrl = false;
+          delete this.translationStart;
+          this.svg.classed("move", false);
+          break;
+        case 32:
+          this.space = false;
+          delete this.translationStart;
+          break;
       }
     });
     window.addEventListener("blur", () => {
       this.ctrl = false;
+      this.space = false;
       this.svg.classed("move", false);
       this.draw = null;
       this.mouseEnterEle = false;
+      this.nowStatus = "";
+      delete this.translationStart;
     }, false);
     this.document.on("mouseup", () => {
       if(!this.draw) return;
@@ -149,6 +174,7 @@ class Draw {
       this.nowStatus = "translation";
     }).on("mouseup", () => {
       delete this.translationStart;
+      this.nowStatus = "";
     }).on("mouseenter", () => {
       this.mouseEnterEle = true;
       this.svg.classed("move", this.ctrl);
@@ -176,14 +202,16 @@ class Draw {
           .attr("x", offsetX)
           .attr("y", offsetY)
           .attr("width", 0)
-          .attr("height", 0);
+          .attr("height", 0)
+          .attr("data_id", this.data_id++);
         this.drawEvent();
         break;
       case "circle":
         this.draw = this.svg.append("circle")
           .attr("cx", offsetX)
           .attr("cy", offsetY)
-          .attr("r", 0);
+          .attr("r", 0)
+          .attr("data_id", this.data_id++);
         this.drawEvent();
         break;
       case "pencil":
@@ -197,21 +225,46 @@ class Draw {
   drawing(){
     let {startX, startY, width, height} = this.getEndpoint4(),
       {offsetX, offsetY} = d3.event,
+      width1 = type === "square" ? Math.min(width, height) : width,
+      height2 = type === "square" ? Math.min(width, height) : height,
       type = this.drawObj.type;
 
     switch(type){
       case "rect":
       case "square":
+        this.drawReferences = [
+          "V" + startX,
+          "V" + this.arithmetic("+", startX, width1/2),
+          "V" + (startX + width1),
+          "H" + startY,
+          "H" + this.arithmetic("+", startY, height2/2),
+          "H" + (startY + height2)
+        ];
+        this.showReferences();
+        if(this.adhesion){
+
+        }
         this.draw.attr("x", startX)
           .attr("y", startY)
-          .attr("width", type === "square" ? Math.min(width, height) : width)
-          .attr("height", type === "square" ? Math.min(width, height) : height);
+          .attr("width", width1)
+          .attr("height", height2);
         break;
       case "circle":
         let r = Math.min(width, height)/2;
-        this.draw.attr("cx", startX + r)
-          .attr("cy", startY + r)
-          .attr("r", r);
+        this.drawReferences = [
+          "V" + startX,
+          "V" + this.arithmetic("+", startX, r),
+          "V" + this.arithmetic("+", startX, 2*r),
+          "H" + startY,
+          "H" + this.arithmetic("+", startY, r),
+          "H" + this.arithmetic("+", startY, 2*r)
+        ];
+        this.showReferences();
+        if(!this.adhesion){
+          this.draw.attr("cx", startX + r)
+            .attr("cy", startY + r)
+            .attr("r", r);
+        }
         break;
       case "pencil":
         this.draw.attr("d", `${this.draw.attr("d")} L${offsetX} ${offsetY}`);
@@ -223,76 +276,142 @@ class Draw {
   drawEnd(){
     // 太小的删除
     let width = Math.abs(this.spotStart.offsetX - d3.event.offsetX),
-      height = Math.abs(this.spotStart.offsetY - d3.event.offsetY);
+      height = Math.abs(this.spotStart.offsetY - d3.event.offsetY),
+      data_id = this.draw.attr("data_id").toString();
     if(Math.max(width, height) <= 5){
       this.draw.remove();
+      this.deleteReferences(data_id);
       this.draw = null;
       return;
     }
 
     // 添加到参考点
+    if(this.references[data_id]){
+      this.draw = null;
+      return;
+    }
+    this.references[data_id] = this.references[data_id] || [];
     switch(this.draw.node().tagName){
       case "rect":
         // 垂直方向（左）
-        this.references.push(`V${
+        this.references[data_id].push(`V${
           Math.round(this.draw.attr("x"))
           }`);
         // 垂直方向（中）
-        this.references.push(`V${
+        this.references[data_id].push(`V${
           this.arithmetic("+", this.draw.attr("x"), 
           this.arithmetic("/", this.draw.attr("width"), 2))
           }`);
         // 垂直方向（右）
-        this.references.push(`V${
+        this.references[data_id].push(`V${
           this.arithmetic("+", this.draw.attr("x"), this.draw.attr("width"))
           }`);
         // 水平方向（左）
-        this.references.push(`H${
+        this.references[data_id].push(`H${
           Math.round(this.draw.attr("y"))
           }`);
         // 水平方向（中）
-        this.references.push(`H${
+        this.references[data_id].push(`H${
           this.arithmetic("+", this.draw.attr("y"), 
           this.arithmetic("/", this.draw.attr("height"), 2))
           }`);
         // 水平方向（右）
-        this.references.push(`H${
+        this.references[data_id].push(`H${
           this.arithmetic("+", this.draw.attr("y"), this.draw.attr("height"))
           }`);
         break;
       case "circle":
         // 垂直方向（左）
-        this.references.push(`V${
+        this.references[data_id].push(`V${
           this.arithmetic("-", this.draw.attr("cx"), this.draw.attr("r"))
           }`);
         // 垂直方向（中）
-        this.references.push(`V${
+        this.references[data_id].push(`V${
           Math.round(this.draw.attr("cx"))
           }`);
         // 垂直方向（右）
-        this.references.push(`V${
+        this.references[data_id].push(`V${
           this.arithmetic("+", this.draw.attr("cx"), this.draw.attr("r"))
           }`);
         // 水平方向（左）
-        this.references.push(`H${
+        this.references[data_id].push(`H${
           this.arithmetic("-", this.draw.attr("cy"), this.draw.attr("r"))
           }`);
         // 水平方向（中）
-        this.references.push(`H${
+        this.references[data_id].push(`H${
           Math.round(this.draw.attr("cy"))
           }`);
         // 水平方向（右）
-        this.references.push(`H${
+        this.references[data_id].push(`H${
           this.arithmetic("+", this.draw.attr("cy"), this.draw.attr("r"))
           }`);
         break;
     }
 
     this.draw = null;
+  }
 
-    this.references.forEach(item => {
-      console.log(item);
-      this.dottedLine(item);
+  // 自动吸合
+  autoAdhesion(){
+
+  }
+
+  // 修改指定的参考线（平移）
+  putReference1(x, y){
+    if(!this.drawReferences) return;
+
+    for(let i = 0; i < this.drawReferences.length; i++){
+      if(!this.drawReferences[i]) break;
+
+      let type = this.drawReferences[i].match(/^[HV]/)[0];
+      this.drawReferences[i] = type + this.arithmetic("+", this.drawReferences[i].replace(/^[HV]/, ""), type === "V" ? x : y);
+    }
+
+    this.showReferences();
+  }
+
+  // 显示指定的参考线
+  showReferences(){
+    let adhesion = false;
+    d3.selectAll(".reference").remove();
+
+    for(let k in this.references){
+      if(!this.references[k]) break;
+      this.references[k].forEach(item => {
+        this.drawReferences.forEach(item2 => {
+          let num = parseFloat(parseFloat(item.match(/\d+/)[0] - item2.match(/\d+/)[0]));
+          if(item.match(/[HV]/)[0] === item2.match(/[HV]/)[0] && Math.abs(num) <= config.adhesion){
+            adhesion = num;
+            this.dottedLine(item, k);
+          }
+        });
+      });
+    }
+
+    this.adhesion = adhesion;
+  }
+
+  // 删除参考线
+  deleteReferences(data_id, ...references){
+    if(!data_id) return;
+
+    data_id = data_id.toString();
+    let reference = d3.selectAll(".reference").filter(function(){
+      return d3.select(this).attr("data_id") === data_id;
+    });
+
+    // 全部删除
+    if(!references || references.length === 0){
+      delete this.references[data_id];
+      reference.remove();
+    }
+
+    // 删除指定的
+    references.forEach(item => {
+      let dom = reference.filter(function(){
+        return d3.select(this).attr("reference_value") === item;
+      });
+      if(dom) dom.remove();
     });
   }
 
@@ -301,25 +420,28 @@ class Draw {
     let {offsetX, offsetY} = d3.event,
       width = offsetX - this.spotStart.offsetX,
       height = offsetY - this.spotStart.offsetY,
-      startX, startY;
+      startX, startY, position;
 
     switch(true){
       // 右下
       case width >= 0 && height >= 0:
         startX = this.spotStart.offsetX;
         startY = this.spotStart.offsetY;
+        position = 2;
         break;
       // 右上
       case width >= 0 && height <= 0:
         startX = this.spotStart.offsetX;
         startY = offsetY;
         height = Math.abs(height);
+        position = 1;
         break;
       // 左下
       case width <= 0 && height >= 0:
         startX = offsetX;
         startY = this.spotStart.offsetY;
         width = Math.abs(width);
+        position = 3;
         break;
       // 左上
       case width <= 0 && height <= 0:
@@ -327,6 +449,7 @@ class Draw {
         startY = offsetY;
         width = Math.abs(width);
         height = Math.abs(height);
+        position = 4;
         break;
     }
 
@@ -334,7 +457,8 @@ class Draw {
       startX,
       startY,
       width,
-      height
+      height,
+      position
     }
   }
 
@@ -350,30 +474,36 @@ class Draw {
     }
 
     let {offsetX, offsetY} = d3.event,
-      left = offsetX - this.translationStart.offsetX,
-      top = offsetY - this.translationStart.offsetY;
+      left = this.arithmetic("-", offsetX, this.translationStart.offsetX),
+      top = this.arithmetic("-", offsetY, this.translationStart.offsetY);
 
     switch(this.draw.node().tagName){
       case "rect":
         this.draw
-          .attr("x", parseFloat(this.draw.attr("x")) + left)
-          .attr("y", parseFloat(this.draw.attr("y")) + top);
+          .attr("x", this.arithmetic("+", this.draw.attr("x"), left))
+          .attr("y", this.arithmetic("+", this.draw.attr("y"), top));
         break;
       case "circle":
         this.draw
-          .attr("cx", parseFloat(this.draw.attr("cx")) + left)
-          .attr("cy", parseFloat(this.draw.attr("cy")) + top);
+          .attr("cx", this.arithmetic("+", this.draw.attr("cx"), left))
+          .attr("cy", this.arithmetic("+", this.draw.attr("cy"), top));
         break;
     }
+    this.putReference1(left, top);
+    this.showReferences();
 
     this.translationStart = {
       offsetX,
       offsetY
     };
+    if(this.nowStatus === "draw"){
+      this.spotStart.offsetX += left;
+      this.spotStart.offsetY += top;
+    }
   }
 
   // 绘制虚线
-  dottedLine(reference){
+  dottedLine(reference, data_id){
     if(!reference) return;
 
     let type = reference.match(/^[HV]/)[0],
@@ -384,7 +514,11 @@ class Draw {
       svg = this.svg.node(),
       max = type === "H" ? svg.scrollWidth : svg.scrollHeight;
 
-    this.svg.append("path")
+    this.svg.insert("path", ":first-child")
+      .classed("reference", true)
+      .attr("reference_value", reference)
+      .attr("data_id", data_id)
+      .style("stroke", data_id ? "#56ccff" : "black")
       .attr("d", getPath());
 
     function getPath(d="", total=0){

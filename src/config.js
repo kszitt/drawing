@@ -1,5 +1,6 @@
 
 
 export default {
-  tool: ["pencil", ""]
+  tool: ["pencil", ""],
+  adhesion: 2
 };
