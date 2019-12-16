@@ -223,31 +223,43 @@ class Draw {
 
   // 绘制中
   drawing(){
-    let {startX, startY, width, height} = this.getEndpoint4(),
+    let {startX, startY, width, height, position} = this.getEndpoint4(),
       {offsetX, offsetY} = d3.event,
       width1 = type === "square" ? Math.min(width, height) : width,
-      height2 = type === "square" ? Math.min(width, height) : height,
-      type = this.drawObj.type;
+      height1 = type === "square" ? Math.min(width, height) : height,
+      type = this.drawObj.type,
+      adhesion;
 
     switch(type){
       case "rect":
       case "square":
+        // 初始的参考点
         this.drawReferences = [
           "V" + startX,
           "V" + this.arithmetic("+", startX, width1/2),
           "V" + (startX + width1),
           "H" + startY,
-          "H" + this.arithmetic("+", startY, height2/2),
-          "H" + (startY + height2)
+          "H" + this.arithmetic("+", startY, height1/2),
+          "H" + (startY + height1)
         ];
+        // 吸合
+        let adhesion = this.autoAdhesion(startX, startY, width, height, position);
+        // 吸合后的参考点
+        this.drawReferences = [
+          "V" + adhesion.startX,
+          "V" + this.arithmetic("+", adhesion.startX, adhesion.width1/2),
+          "V" + (adhesion.startX + adhesion.width1),
+          "H" + adhesion.startY,
+          "H" + this.arithmetic("+", adhesion.startY, adhesion.height1/2),
+          "H" + (adhesion.startY + adhesion.height1)
+        ];
+        // 显示参考点
         this.showReferences();
-        if(this.adhesion){
-
-        }
-        this.draw.attr("x", startX)
-          .attr("y", startY)
-          .attr("width", width1)
-          .attr("height", height2);
+        // 修改图形
+        this.draw.attr("x", adhesion.startX)
+          .attr("y", adhesion.startY)
+          .attr("width", adhesion.width1)
+          .attr("height", adhesion.height1);
         break;
       case "circle":
         let r = Math.min(width, height)/2;
@@ -352,8 +364,74 @@ class Draw {
   }
 
   // 自动吸合
-  autoAdhesion(){
+  autoAdhesion(startX=parseFloat(this.drawReferences[0].match(/\d+/)[0]),
+               startY=parseFloat(this.drawReferences[3].match(/\d+/)[0]),
+               width=this.arithmetic("-", this.drawReferences[2].match(/\d+/)[0], this.drawReferences[0].match(/\d+/)[0]),
+               height=this.arithmetic("-", this.drawReferences[5].match(/\d+/)[0], this.drawReferences[3].match(/\d+/)[0]),
+               position){
+    let type = this.drawObj.type,
+      _this = this,
+      match;
 
+    for(let k in this.references){
+      if(!this.references[k]) break;
+      this.references[k].forEach((item1, index1) => {
+        match = "";
+        this.drawReferences.forEach((item2, index2) => {
+          let num = parseFloat(parseFloat(item1.match(/\d+/)[0] - item2.match(/\d+/)[0]));
+          if(item1.match(/[HV]/)[0] === item2.match(/[HV]/)[0] && Math.abs(num) <= config.adhesion){
+            match += index2;
+            adhesion(item1, index1, item2, index2, num);
+          }
+        });
+      });
+    }
+
+    function adhesion(obj1, index1, obj2, index2, num){
+      // console.log("arguments: ", arguments);
+      // console.log("position: ", position)
+      switch(index1){
+        // X轴左、右
+        case 0:
+        case 1:
+        case 2:
+          if(position === 1 || position === 2){
+            width = _this.arithmetic("-", obj1.match(/\d+/)[0] - startX);
+          } else {
+            startX = parseFloat(obj1.match(/\d+/)[0]);
+            width = _this.arithmetic("-", _this.drawReferences[2].match(/\d+/)[0], startX);
+          }
+          break;
+        /*// X轴中
+        case 1:*/
+
+          // break;
+        // Y轴左、右
+        case 3:
+        case 4:
+        case 5:
+          if(position === 2 || position === 3){
+            height = _this.arithmetic("-", obj1.match(/\d+/)[0] - startY);
+          } else {
+            startY = parseFloat(obj1.match(/\d+/)[0]);
+            height = _this.arithmetic("-", _this.drawReferences[5].match(/\d+/)[0], startY);
+          }
+          break;
+        // Y轴中
+        /*case 4:
+
+          break;*/
+      }
+    }
+
+    return {
+      startX,
+      startY,
+      width,
+      height,
+      width1: type === "square" ? Math.min(width, height) : width,
+      height1: type === "square" ? Math.min(width, height) : height,
+    };
   }
 
   // 修改指定的参考线（平移）
@@ -367,12 +445,11 @@ class Draw {
       this.drawReferences[i] = type + this.arithmetic("+", this.drawReferences[i].replace(/^[HV]/, ""), type === "V" ? x : y);
     }
 
-    this.showReferences();
+    // this.showReferences();
   }
 
   // 显示指定的参考线
   showReferences(){
-    let adhesion = false;
     d3.selectAll(".reference").remove();
 
     for(let k in this.references){
@@ -381,14 +458,11 @@ class Draw {
         this.drawReferences.forEach(item2 => {
           let num = parseFloat(parseFloat(item.match(/\d+/)[0] - item2.match(/\d+/)[0]));
           if(item.match(/[HV]/)[0] === item2.match(/[HV]/)[0] && Math.abs(num) <= config.adhesion){
-            adhesion = num;
             this.dottedLine(item, k);
           }
         });
       });
     }
-
-    this.adhesion = adhesion;
   }
 
   // 删除参考线
@@ -476,20 +550,24 @@ class Draw {
     let {offsetX, offsetY} = d3.event,
       left = this.arithmetic("-", offsetX, this.translationStart.offsetX),
       top = this.arithmetic("-", offsetY, this.translationStart.offsetY);
-
+    this.putReference1(left, top);
+    let adhesion = this.autoAdhesion();
     switch(this.draw.node().tagName){
       case "rect":
         this.draw
-          .attr("x", this.arithmetic("+", this.draw.attr("x"), left))
-          .attr("y", this.arithmetic("+", this.draw.attr("y"), top));
+          .attr("x", adhesion.startX)
+          .attr("y", adhesion.startY)
+          .attr("width", adhesion.width)
+          .attr("height", adhesion.height);
         break;
       case "circle":
         this.draw
-          .attr("cx", this.arithmetic("+", this.draw.attr("cx"), left))
-          .attr("cy", this.arithmetic("+", this.draw.attr("cy"), top));
+          .attr("cx", this.arithmetic("+", adhesion.startX, adhesion.width/2))
+          .attr("cy", this.arithmetic("+", adhesion.startY, adhesion.height/2))
+          .attr("r", Math.round(adhesion.width/2));
         break;
     }
-    this.putReference1(left, top);
+
     this.showReferences();
 
     this.translationStart = {

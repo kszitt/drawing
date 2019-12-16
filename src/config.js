@@ -2,5 +2,5 @@
 
 export default {
   tool: ["pencil", ""],
-  adhesion: 2
+  adhesion: 5
 };
